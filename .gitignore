@@ -12,6 +12,7 @@ proposals/
 usage.jsonl
 
 # 2AIO 出力 (ランタイム生成物)
+.2aio/
 output/
 2aio-output/
 _archive/

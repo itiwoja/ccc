@@ -1,0 +1,493 @@
+/* 2AIO Dashboard — フェーズ実行コンソール
+ *
+ * 既存スパイクのトークン (--bg / --panel / --line / --accent #d97757) を引き継ぎ、
+ * 「許可 / 保留 / 拒否」の意味色だけを足している。アクセントは1色のまま。 */
+
+:root {
+  --bg: #0e0f11;
+  --panel: #16181c;
+  --raise: #1c1f24;
+  --line: #24272d;
+  --line-soft: #1e2126;
+  --fg: #e6e8ea;
+  --muted: #8b9198;
+  --faint: #5d646c;
+
+  --accent: #d97757;
+  --accent-bg: #2a1a13;
+
+  --ok: #7fd1a0;
+  --ok-bg: #16241c;
+  --warn: #e0b256;
+  --warn-bg: #2a2213;
+  --err: #e57373;
+  --err-bg: #2a1618;
+  --user-bg: #1a2331;
+
+  --r-1: 6px;
+  --r-2: 10px;
+  --r-3: 14px;
+
+  --mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #faf9f7;
+    --panel: #ffffff;
+    --raise: #f4f2ef;
+    --line: #e2e0dc;
+    --line-soft: #eceae6;
+    --fg: #1b1c1e;
+    --muted: #6b7076;
+    --faint: #9aa0a6;
+
+    --accent-bg: #fbeee8;
+    --ok: #1f7a4d;
+    --ok-bg: #e8f5ee;
+    --warn: #96650b;
+    --warn-bg: #fbf1dc;
+    --err: #b3352f;
+    --err-bg: #fbe9e8;
+    --user-bg: #eaf1fa;
+
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.65 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea { font: inherit; color: inherit; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-1);
+}
+
+/* ---------------------------------------------------------------- header */
+
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand { font-size: 13px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+.brand span { color: var(--muted); font-weight: 400; }
+
+.goal {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.goal strong { color: var(--fg); font-weight: 500; }
+
+.branch {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.shell { flex: 1; display: flex; min-height: 0; }
+
+/* ---------------------------------------------------------------- phase rail */
+
+.rail {
+  width: 272px;
+  flex: none;
+  border-right: 1px solid var(--line);
+  padding: 16px 0 20px;
+  overflow-y: auto;
+  background: var(--panel);
+}
+
+.rail-head {
+  padding: 0 18px 12px;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.step {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 9px 18px 9px 46px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.step:hover { background: var(--raise); }
+.step[disabled] { cursor: default; }
+.step[disabled]:hover { background: none; }
+.step[aria-current="step"] { border-left-color: var(--accent); background: var(--raise); }
+
+/* 縦のレール線 — ドットを繋ぐ。最後の1本だけ切る。 */
+.step::before {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: 26px;
+  bottom: -9px;
+  width: 1px;
+  background: var(--line);
+}
+.step:last-of-type::before { display: none; }
+
+.dot {
+  position: absolute;
+  left: 21px;
+  top: 12px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  background: var(--panel);
+}
+.step[data-status="running"] .dot { border-color: var(--accent); background: var(--accent); }
+.step[data-status="waiting"] .dot { border-color: var(--warn); background: var(--warn-bg); }
+.step[data-status="done"] .dot { border-color: var(--ok); background: var(--ok); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .step[data-status="running"] .dot { animation: breathe 1.8s ease-in-out infinite; }
+}
+@keyframes breathe {
+  50% { opacity: .35; }
+}
+
+.step-top { display: flex; align-items: baseline; gap: 8px; }
+.step-name { font-size: 13.5px; font-weight: 500; }
+.step[data-status="idle"] .step-name { color: var(--muted); }
+
+.lane {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .03em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  margin-left: auto;
+}
+.lane[data-lane="codex"] { color: var(--fg); background: var(--raise); }
+
+/* 署名的な一行 — 実際に強制されている権限をそのまま出す */
+.policy {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--faint);
+  margin-top: 3px;
+  word-break: break-word;
+}
+.step[aria-current="step"] .policy { color: var(--muted); }
+
+.rail-note {
+  margin: 14px 18px 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- stream */
+
+.center { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.stream { flex: 1; overflow-y: auto; padding: 20px 24px 8px; scrollbar-gutter: stable; }
+.thread { max-width: 74ch; margin: 0 auto; display: flex; flex-direction: column; gap: 9px; }
+
+.ev { font-size: 14px; }
+.ev .body { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.ev-user {
+  margin-left: 12%;
+  background: var(--user-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  padding: 9px 13px;
+}
+.ev-assistant { padding: 2px 0; }
+
+.who {
+  font-size: 10.5px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 3px;
+}
+
+/* meta 行 — ready / note / turn-end / artifact */
+.ev-meta {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+  padding: 1px 2px;
+  font-variant-numeric: tabular-nums;
+}
+.ev-meta.is-failed { color: var(--err); }
+
+/* ツール実行の1行トレース */
+.trace {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: var(--r-1);
+  background: var(--raise);
+  border: 1px solid var(--line-soft);
+}
+.trace .mark { flex: none; margin-top: 3px; color: var(--ok); }
+.trace .cmd { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.trace .why { color: var(--faint); font-size: 11px; }
+.trace.is-call { background: none; border-color: var(--line-soft); }
+.trace.is-call .mark { color: var(--faint); }
+.trace.is-denied { background: var(--err-bg); border-color: transparent; }
+.trace.is-denied .mark { color: var(--err); }
+
+/* フェーズ区切り */
+.phase-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0 6px;
+}
+.phase-rule::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.phase-rule .name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--accent);
+}
+.phase-rule .pol { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+
+/* 承認カード — タイムアウト無しで人間を待つ */
+.card {
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  border-radius: var(--r-3);
+  padding: 13px 15px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { animation: rise 160ms cubic-bezier(.22,.61,.36,1); }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+}
+.card h3 { margin: 0 0 3px; font-size: 12.5px; font-weight: 600; }
+.card .why { font-size: 11.5px; color: var(--muted); margin-bottom: 9px; }
+.card pre {
+  margin: 0 0 11px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border-radius: var(--r-1);
+  padding: 8px 10px;
+}
+.card .acts { display: flex; gap: 8px; align-items: center; }
+.card .hint { font-size: 11px; color: var(--muted); margin-left: auto; }
+.card.is-resolved { border-color: var(--line); background: var(--panel); }
+.card.is-resolved .acts { display: none; }
+
+.verdict { font-size: 11.5px; font-family: var(--mono); }
+.verdict[data-allowed="true"] { color: var(--ok); }
+.verdict[data-allowed="false"] { color: var(--err); }
+
+.empty {
+  max-width: 60ch;
+  margin: 8vh auto 0;
+  color: var(--muted);
+  text-align: center;
+}
+.empty h2 { color: var(--fg); font-size: 17px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.01em; }
+.empty p { margin: 0 0 4px; }
+
+/* ---------------------------------------------------------------- gate + composer */
+
+footer { border-top: 1px solid var(--line); background: var(--panel); }
+.dock { max-width: 74ch; margin: 0 auto; padding: 12px 24px 14px; }
+
+.gate {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--raise);
+}
+.gate.is-open { border-color: var(--accent); }
+.gate .label { font-size: 12.5px; }
+.gate .label b { font-weight: 600; }
+.gate .spacer { flex: 1; }
+
+.composer { display: flex; gap: 8px; align-items: flex-end; }
+textarea {
+  flex: 1;
+  resize: none;
+  padding: 9px 12px;
+  min-height: 42px;
+  max-height: 30vh;
+  border-radius: var(--r-1);
+  border: 1px solid var(--line);
+  background: var(--bg);
+}
+textarea:focus { outline: none; border-color: var(--accent); }
+textarea:disabled { opacity: .5; }
+
+/* ---------------------------------------------------------------- buttons */
+
+.btn {
+  padding: 7px 13px;
+  min-height: 34px;
+  border-radius: var(--r-1);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  cursor: pointer;
+  transition: border-color 120ms ease-out, background-color 120ms ease-out;
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:disabled { opacity: .4; cursor: default; }
+
+.btn-primary { border-color: var(--accent); color: var(--accent); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-bg); }
+
+.btn-danger { border-color: var(--err); color: var(--err); }
+.btn-danger:hover:not(:disabled) { background: var(--err-bg); }
+
+.btn-ok { border-color: var(--ok); color: var(--ok); }
+.btn-ok:hover:not(:disabled) { background: var(--ok-bg); }
+
+.btn-quiet { border-color: transparent; color: var(--muted); }
+.btn-quiet:hover:not(:disabled) { border-color: var(--line); }
+
+.btn-sm { padding: 4px 10px; min-height: 28px; font-size: 12.5px; }
+
+/* ---------------------------------------------------------------- artifact panel */
+
+.panel {
+  width: 400px;
+  flex: none;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.panel[hidden] { display: none; }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-head .name { font-family: var(--mono); font-size: 12px; flex: 1; }
+
+.panel-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.panel-body.is-empty { color: var(--faint); font-family: var(--sans); }
+
+/* push パネル */
+.push-box { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.blocked {
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  border-radius: var(--r-2);
+  padding: 11px 13px;
+  margin-bottom: 12px;
+}
+.blocked strong { display: block; font-size: 12.5px; margin-bottom: 5px; }
+.blocked p { margin: 0 0 6px; font-size: 12.5px; line-height: 1.6; }
+.blocked p:last-child { margin-bottom: 0; }
+.blocked-acts { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.push-box h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); }
+.push-box ul { margin: 0 0 12px; padding-left: 18px; font-family: var(--mono); font-size: 11.5px; }
+.push-box code {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--bg);
+  border-radius: var(--r-1);
+  padding: 7px 9px;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1180px) { .panel { width: 330px; } }
+
+@media (max-width: 900px) {
+  .shell { flex-direction: column; }
+  .rail {
+    width: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    overflow-x: auto;
+    padding: 10px 12px;
+    gap: 4px;
+  }
+  .rail-head, .rail-note, .policy { display: none; }
+  .step { width: auto; flex: none; padding: 6px 12px 6px 30px; border-left: 0; border-bottom: 2px solid transparent; }
+  .step[aria-current="step"] { border-bottom-color: var(--accent); }
+  .step::before { display: none; }
+  .dot { left: 10px; top: 12px; }
+  .lane { display: none; }
+  .panel {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    z-index: 10;
+    border-left: 0;
+  }
+  .stream { padding: 14px; }
+  .dock { padding: 10px 14px 12px; }
+}

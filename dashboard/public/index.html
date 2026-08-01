@@ -3,158 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>2AIO Dashboard — SDK 疎通検証</title>
-<style>
-  :root {
-    --bg: #0e0f11; --panel: #16181c; --line: #24272d;
-    --fg: #e6e8ea; --muted: #8b9198;
-    --user: #2a3f5f; --gate: #5a4a1f; --err: #5c2626; --ok: #7fd1a0;
-    --accent: #d97757;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #faf9f7; --panel: #fff; --line: #e2e0dc;
-      --fg: #1b1c1e; --muted: #6b7076;
-      --user: #dbe6f5; --gate: #f5ecd0; --err: #f7dcdc; --ok: #1f7a4d;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--fg);
-    font: 14px/1.65 ui-sans-serif, system-ui, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
-    height: 100vh; display: flex; flex-direction: column;
-  }
-  header {
-    padding: 12px 18px; border-bottom: 1px solid var(--line);
-    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  }
-  h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: .01em; }
-  .lanes { display: flex; gap: 6px; }
-  button {
-    font: inherit; padding: 5px 13px; border-radius: 6px;
-    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-    cursor: pointer;
-  }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-  button:disabled { opacity: .45; cursor: default; }
-  .status { color: var(--muted); font-size: 12px; margin-left: auto; }
-  .status.live { color: var(--ok); }
-
-  main { flex: 1; overflow-y: auto; padding: 18px; }
-  .wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
-
-  .msg { padding: 10px 13px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); }
-  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; letter-spacing: .04em; text-transform: uppercase; }
-  .msg .body { white-space: pre-wrap; word-break: break-word; }
-  .msg.user { background: var(--user); margin-left: 15%; }
-  .msg.gate { background: var(--gate); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12.5px; }
-  .msg.error { background: var(--err); }
-  .msg.note, .msg.ready, .msg.turn-end {
-    background: transparent; border: 0; padding: 2px 4px;
-    color: var(--muted); font-size: 12px; font-family: ui-monospace, Consolas, monospace;
-  }
-  .empty { color: var(--muted); text-align: center; padding: 60px 20px; }
-
-  footer { border-top: 1px solid var(--line); padding: 12px 18px; }
-  .composer { max-width: 760px; margin: 0 auto; display: flex; gap: 8px; }
-  textarea {
-    flex: 1; resize: none; font: inherit; padding: 9px 12px; border-radius: 8px;
-    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-  }
-  textarea:focus { outline: none; border-color: var(--accent); }
-</style>
+<title>2AIO — 調査 → 計画 → 実装 → テスト → Push</title>
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
 <header>
-  <h1>2AIO Dashboard <span style="color:var(--muted);font-weight:400">— SDK 疎通検証</span></h1>
-  <div class="lanes">
-    <button id="claude" aria-pressed="false">Claude Agent SDK</button>
-    <button id="codex" aria-pressed="false">Codex SDK</button>
-  </div>
-  <div class="status" id="status">レーンを選んでください</div>
+  <div class="brand">2AIO <span>フェーズ実行</span></div>
+  <div class="goal" id="goal"></div>
+  <div class="branch" id="branch"></div>
 </header>
 
-<main><div class="wrap" id="log">
-  <div class="empty">上のボタンでレーンを選ぶとセッションが始まります。</div>
-</div></main>
+<div class="shell">
 
-<footer><div class="composer">
-  <textarea id="input" rows="2" placeholder="メッセージ… (Enter で送信 / Shift+Enter で改行)" disabled></textarea>
-  <button id="send" disabled>送信</button>
-</div></footer>
+  <nav class="rail" id="rail" aria-label="フェーズ">
+    <div class="rail-head">フェーズ</div>
+    <div id="steps"></div>
+    <p class="rail-note">
+      各行の下段は、そのフェーズで<strong>実際に強制されている</strong>権限。
+      範囲外のツールは承認カードになり、人間が答えるまで停止する。
+    </p>
+  </nav>
 
-<script>
-const $ = (id) => document.getElementById(id)
-const log = $('log'), status = $('status'), input = $('input'), send = $('send')
-let sessionId = null, source = null, empty = true
+  <div class="center">
+    <main class="stream" id="stream">
+      <div class="thread" id="thread" aria-live="polite" aria-relevant="additions"></div>
+    </main>
 
-const LABEL = {
-  user: 'あなた', assistant: 'AI', gate: 'ゲート',
-  error: 'エラー', note: '', ready: '', 'turn-end': '',
-}
+    <footer>
+      <div class="dock">
+        <div class="gate" id="gate" hidden></div>
+        <form class="composer" id="composer">
+          <textarea id="input" rows="1" placeholder="作りたいもの・直したいことを1行で… (Enter で送信 / Shift+Enter で改行)"></textarea>
+          <button class="btn btn-primary" id="send" type="submit">調査を開始</button>
+        </form>
+      </div>
+    </footer>
+  </div>
 
-function append(event) {
-  if (empty) { log.innerHTML = ''; empty = false }
-  const el = document.createElement('div')
-  el.className = 'msg ' + event.kind
-  const label = LABEL[event.kind] ?? event.kind
-  el.innerHTML = (label ? '<div class="who"></div>' : '') + '<div class="body"></div>'
-  if (label) el.querySelector('.who').textContent = label
-  el.querySelector('.body').textContent = event.text
-  log.append(el)
-  el.scrollIntoView({ block: 'end' })
-}
+  <aside class="panel" id="panel" hidden aria-label="成果物">
+    <div class="panel-head">
+      <span class="name" id="panel-name"></span>
+      <button class="btn btn-sm btn-quiet" id="panel-close" type="button">閉じる</button>
+    </div>
+    <div id="push-box"></div>
+    <pre class="panel-body" id="panel-body"></pre>
+  </aside>
 
-async function startLane(lane) {
-  source?.close()
-  log.innerHTML = ''
-  empty = false
-  status.textContent = '起動中…'
-  status.className = 'status'
-  for (const id of ['claude', 'codex']) $(id).setAttribute('aria-pressed', String(id === lane))
+</div>
 
-  const res = await fetch('/api/session', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ lane }),
-  })
-  if (!res.ok) { status.textContent = '起動失敗'; return }
-  sessionId = (await res.json()).id
-
-  source = new EventSource('/api/stream?id=' + sessionId)
-  source.onmessage = (e) => append(JSON.parse(e.data))
-  source.onopen = () => {
-    status.textContent = lane + ' 接続中'
-    status.className = 'status live'
-  }
-  source.onerror = () => {
-    status.textContent = '接続が切れました'
-    status.className = 'status'
-  }
-
-  input.disabled = send.disabled = false
-  input.focus()
-}
-
-async function submit() {
-  const text = input.value.trim()
-  if (!text || !sessionId) return
-  input.value = ''
-  await fetch('/api/message', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id: sessionId, text }),
-  })
-}
-
-$('claude').onclick = () => startLane('claude')
-$('codex').onclick = () => startLane('codex')
-send.onclick = submit
-input.onkeydown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
-}
-</script>
+<script type="module" src="/app.js"></script>
 </body>
 </html>
