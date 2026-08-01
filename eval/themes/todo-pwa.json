@@ -1,6 +1,0 @@
-{
-  "id": "todo-pwa",
-  "theme": "買い物リストを管理するToDo PWA（追加・完了チェック・削除・localStorage永続化）",
-  "stack": "html",
-  "note": "MVP 固定テーマ。--stack=html（単一HTML/PWA・テストランナー無し）のため、採点はハーネスが決定的に測れる指標のみ（Issue #25 修正条件2）。npm build/tsc/lint/カバレッジ採点は spa|next 固定の第2テーマを追加した時のみ有効化する。"
-}

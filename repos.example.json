@@ -1,6 +1,0 @@
-{
-  "_comment": "任意の手動シード見本。通常はダッシュボードの『リポジトリ登録（HTTPS）』から登録すれば repos.json が自動生成されるため、このファイルを使う必要はありません。手で書く場合は repos.json という名前で置いてください（git管理外）。",
-  "repos": [
-    { "id": "owner-name", "url": "https://github.com/owner/name", "path": "workspaces/name", "branch": "main", "mode": "existing", "state": "ready", "defaultLane": "build" }
-  ]
-}
